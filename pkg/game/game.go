@@ -1,6 +1,9 @@
 package game
 
+// Mostly inspired by https://leetcode.com/problems/design-snake-game
+
 import (
+	"errors"
 	"math/rand"
 	"time"
 )
@@ -21,6 +24,10 @@ const (
 
 // CanApply tells if the current direction can be changed to the given one.
 func (d Direction) CanApply(to Direction) bool {
+	if d == to {
+		return true
+	}
+
 	if d == Left || d == Right {
 		return to == Up || to == Down
 	}
@@ -33,12 +40,24 @@ type Entity byte
 
 const (
 	// Snake represents a part of a snake.
-	Snake = 'o'
+	Snake Entity = Entity(35)
 	// Cell represents an empty cell of the grid.
-	Cell = '*'
+	Cell Entity = Entity(183)
 	// Food represents a food on the grid.
-	Food = 'x'
+	Food Entity = Entity(243)
 )
+
+// ErrUnacceptableDirection tells that the given direction was not met by CanMove method.
+var ErrUnacceptableDirection = errors.New("the given direction is unacceptable")
+
+// ErrBoundriesCross means that the snake has crossed the border.
+var ErrBoundriesCross = errors.New("snake has crossed the border")
+
+// ErrSelfEating means that the snake has bitten its body.
+var ErrSelfEating = errors.New("snake has bitten its body")
+
+// ErrGameIsCompleted tells that the game was successfully completed.
+var ErrGameIsCompleted = errors.New("game is completed")
 
 var directions = [][2]int{
 	{1, 0},
@@ -60,21 +79,20 @@ func (u unit) next(d Direction) unit {
 
 // SnakeGame represents a game logic.
 type SnakeGame struct {
-	gen    *rand.Rand
-	width  int
-	height int
-	queue  []unit
-	table  map[unit]bool
-	grid   [][]Entity
-	score  int
-	food   int
+	gen       *rand.Rand
+	width     int
+	height    int
+	queue     []unit
+	table     map[unit]bool
+	grid      [][]Entity
+	score     int
+	direction Direction
 }
 
 // New creates a new snake game state.
 func New(width int, height int) *SnakeGame {
 	u := unit{x: 0, y: 0}
 	grid := make([][]Entity, height)
-	gen := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	for i := range grid {
 		grid[i] = make([]Entity, width)
@@ -87,13 +105,13 @@ func New(width int, height int) *SnakeGame {
 	grid[u.y][u.x] = Snake
 
 	game := &SnakeGame{
-		gen:    gen,
-		food:   -1,
-		width:  width,
-		height: height,
-		queue:  []unit{u},
-		grid:   grid,
-		score:  0,
+		gen:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		width:     width,
+		height:    height,
+		queue:     []unit{u},
+		grid:      grid,
+		score:     0,
+		direction: Right,
 	}
 
 	game.generateFood()
@@ -101,44 +119,61 @@ func New(width int, height int) *SnakeGame {
 	return game
 }
 
+// CanMove tells if the next move operation is allowed for the given direction.
+func (g *SnakeGame) CanMove(direction Direction) bool {
+	return g.direction.CanApply(direction)
+}
+
 // Move moves the snake to the given direction.
 // Returns the current score. -1 means that the game is over.
-func (g *SnakeGame) Move(direction Direction) int {
+func (g *SnakeGame) Move(direction Direction) error {
 	n := len(g.queue)
-	unit := g.queue[n-1].next(direction)
 
-	if unit.x >= g.width || unit.x < 0 || unit.y >= g.height || unit.y < 0 {
-		return -1
+	if !g.CanMove(direction) {
+		return ErrUnacceptableDirection
 	}
 
-	removeLast := true
-	foodY, foodX := toXY(g.food, g.width, g.height)
+	g.direction = direction
+	unit := g.queue[n-1].next(direction)
 
-	if foodX == unit.x && foodY == unit.y {
+	// check if the boundary conditions are met.
+	if unit.x >= g.width || unit.x < 0 || unit.y >= g.height || unit.y < 0 {
+		return ErrBoundriesCross
+	}
+
+	needToGrow := false
+
+	// if the next cell is a food cell, than we have to:
+	// * increase the game score.
+	// * try to regenerate a food.
+	// * remember not to remove the snake tail (snake grow implementation).
+	if g.grid[unit.y][unit.x] == Food {
 		g.score++
 
 		if n == len(g.queue)+1 {
-			return g.score
+			return ErrGameIsCompleted
 		}
 
 		g.generateFood()
-		removeLast = false
+		needToGrow = true
 	}
 
-	if removeLast {
+	if !needToGrow {
 		tail := g.queue[0]
 		g.grid[tail.y][tail.x] = Cell
 		g.queue = g.queue[1:]
 	}
 
+	// self-eating edge case
 	if g.grid[unit.y][unit.x] == Snake {
-		return -1
+		return ErrSelfEating
 	}
 
+	// Move snake to the next cell.
 	g.queue = append(g.queue, unit)
 	g.grid[unit.y][unit.x] = Snake
 
-	return g.score
+	return nil
 }
 
 // Grid returns the current grid.
@@ -146,12 +181,17 @@ func (g *SnakeGame) Grid() [][]Entity {
 	return g.grid
 }
 
+// Score returns the current game score.
+func (g *SnakeGame) Score() int {
+	return g.score
+}
+
 func (g *SnakeGame) generateFood() {
 	n := g.width * g.height
 
 	for {
-		g.food = g.gen.Intn(n)
-		foodY, foodX := toXY(g.food, g.width, g.height)
+		food := g.gen.Intn(n)
+		foodY, foodX := toXY(food, g.width, g.height)
 
 		if g.grid[foodY][foodX] == Cell {
 			g.grid[foodY][foodX] = Food

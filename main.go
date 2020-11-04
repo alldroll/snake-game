@@ -3,6 +3,7 @@ package main
 // Inspired by https://github.com/danicat/pacgo/
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -70,17 +71,23 @@ func readInput() (string, error) {
 	return "", nil
 }
 
-func printScreen(game *game.SnakeGame, score int) {
+func printScreen(snakeGame *game.SnakeGame, err error) {
 	fmt.Print("\x1b[2J")
 	fmt.Print("\x1b[1;1f")
-	fmt.Printf("Score: %d\n", score)
+	fmt.Printf("Score: %d\n\n", snakeGame.Score())
 
-	for _, line := range game.Grid() {
+	for _, line := range snakeGame.Grid() {
 		for _, entity := range line {
 			fmt.Printf(" %c ", entity)
 		}
 
 		fmt.Println()
+	}
+
+	if errors.Is(err, game.ErrGameIsCompleted) {
+		fmt.Print("\nGame is completed\n")
+	} else if err != nil {
+		fmt.Printf("\nGame over: %s\n", err.Error())
 	}
 }
 
@@ -88,7 +95,6 @@ func main() {
 	snakeGame := game.New(width, height)
 	input := make(chan string)
 	direction := game.Right
-	next := direction
 	gameOver := false
 
 	initialise()
@@ -115,14 +121,13 @@ func main() {
 				break
 			}
 
-			if d := mapping[data]; direction.CanApply(d) {
-				next = d
+			if d := mapping[data]; snakeGame.CanMove(d) {
+				direction = d
 			}
 		case <-ticker.C:
-			direction = next
-			score := snakeGame.Move(direction)
-			printScreen(snakeGame, score)
-			gameOver = score == -1
+			err := snakeGame.Move(direction)
+			printScreen(snakeGame, err)
+			gameOver = err != nil
 		}
 	}
 }
