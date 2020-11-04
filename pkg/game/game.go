@@ -19,6 +19,15 @@ const (
 	Up
 )
 
+// CanApply tells if the current direction can be changed to the given one.
+func (d Direction) CanApply(to Direction) bool {
+	if d == Left || d == Right {
+		return to == Up || to == Down
+	}
+
+	return to == Left || to == Right
+}
+
 // Entity represents a grid entity.
 type Entity byte
 

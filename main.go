@@ -70,13 +70,14 @@ func readInput() (string, error) {
 	return "", nil
 }
 
-func printScreen(game *game.SnakeGame) {
+func printScreen(game *game.SnakeGame, score int) {
 	fmt.Print("\x1b[2J")
 	fmt.Print("\x1b[1;1f")
+	fmt.Printf("Score: %d\n", score)
 
 	for _, line := range game.Grid() {
 		for _, entity := range line {
-			fmt.Printf("%c", entity)
+			fmt.Printf(" %c ", entity)
 		}
 
 		fmt.Println()
@@ -85,16 +86,16 @@ func printScreen(game *game.SnakeGame) {
 
 func main() {
 	snakeGame := game.New(width, height)
-	direction := game.Right
 	input := make(chan string)
+	direction := game.Right
+	next := direction
+	gameOver := false
 
 	initialise()
 	defer cleanup()
 
-	for {
-		printScreen(snakeGame)
-
-		go func(input chan string) {
+	go func(input chan string) {
+		for {
 			data, err := readInput()
 
 			if err != nil {
@@ -102,21 +103,26 @@ func main() {
 			}
 
 			input <- data
-		}(input)
+		}
+	}(input)
 
+	ticker := time.NewTicker(1000 / 5. * time.Millisecond)
+
+	for !gameOver {
 		select {
 		case data := <-input:
 			if data == "ESC" {
 				break
 			}
 
-			if d, ok := mapping[data]; ok {
-				direction = d
+			if d := mapping[data]; direction.CanApply(d) {
+				next = d
 			}
-		default: //nothing
+		case <-ticker.C:
+			direction = next
+			score := snakeGame.Move(direction)
+			printScreen(snakeGame, score)
+			gameOver = score == -1
 		}
-
-		snakeGame.Move(direction)
-		time.Sleep(200 * time.Millisecond)
 	}
 }
