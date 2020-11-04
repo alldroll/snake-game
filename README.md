@@ -6,4 +6,4 @@ Inspired by:
 * https://leetcode.com/problems/design-snake-game/
 * https://github.com/danicat/pacgo
 
-[![asciicast](https://asciinema.org/a/e4En2RqKKEtNRTLpZkLhGbdEJ.svg)](https://asciinema.org/a/e4En2RqKKEtNRTLpZkLhGbdEJ?t=4)
+![Game demo](demo.gif)
