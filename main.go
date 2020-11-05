@@ -16,6 +16,7 @@ import (
 const (
 	width  = 10
 	height = 10
+	frame  = 200
 )
 
 var mapping = map[string]game.Direction{
@@ -112,7 +113,7 @@ func main() {
 		}
 	}(input)
 
-	ticker := time.NewTicker(1000 / 5. * time.Millisecond)
+	timer := time.NewTimer(frame * time.Millisecond)
 
 	for !gameOver {
 		select {
@@ -124,10 +125,11 @@ func main() {
 			if d := mapping[data]; snakeGame.CanMove(d) {
 				direction = d
 			}
-		case <-ticker.C:
+		case <-timer.C:
 			err := snakeGame.Move(direction)
 			printScreen(snakeGame, err)
 			gameOver = err != nil
+			timer.Reset(frame*time.Millisecond - 5*time.Duration(snakeGame.Score()))
 		}
 	}
 }
