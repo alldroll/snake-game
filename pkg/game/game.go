@@ -126,15 +126,9 @@ func (g *SnakeGame) CanMove(direction Direction) bool {
 
 // Move moves the snake to the given direction.
 // Returns the current score. -1 means that the game is over.
-func (g *SnakeGame) Move(direction Direction) error {
+func (g *SnakeGame) Move() error {
 	n := len(g.queue)
-
-	if !g.CanMove(direction) {
-		return ErrUnacceptableDirection
-	}
-
-	g.direction = direction
-	unit := g.queue[n-1].next(direction)
+	unit := g.queue[n-1].next(g.direction)
 
 	// check if the boundary conditions are met.
 	if unit.x >= g.width || unit.x < 0 || unit.y >= g.height || unit.y < 0 {
@@ -184,6 +178,16 @@ func (g *SnakeGame) Grid() [][]Entity {
 // Score returns the current game score.
 func (g *SnakeGame) Score() int {
 	return g.score
+}
+
+// SetDirection sets the current direction to the given one.
+func (g *SnakeGame) SetDirection(direction Direction) bool {
+	if !g.CanMove(direction) {
+		return false
+	}
+
+	g.direction = direction
+	return true
 }
 
 func (g *SnakeGame) generateFood() {

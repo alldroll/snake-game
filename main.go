@@ -11,19 +11,20 @@ import (
 	"time"
 
 	"github.com/alldroll/snake-game/pkg/game"
+	"github.com/alldroll/snake-game/pkg/keyboard"
 )
 
 const (
-	width  = 10
-	height = 10
-	frame  = 200
+	width  = 15
+	height = 15
+	frame  = 150
 )
 
-var mapping = map[string]game.Direction{
-	"UP":    game.Up,
-	"DOWN":  game.Down,
-	"RIGHT": game.Right,
-	"LEFT":  game.Left,
+var mapping = map[keyboard.Button]game.Direction{
+	keyboard.UpArrow:    game.Up,
+	keyboard.DownArrow:  game.Down,
+	keyboard.RightArrow: game.Right,
+	keyboard.LeftArrow:  game.Left,
 }
 
 func initialise() {
@@ -44,38 +45,10 @@ func cleanup() {
 	}
 }
 
-func readInput() (string, error) {
-	buffer := make([]byte, 100)
-	cnt, err := os.Stdin.Read(buffer)
-
-	if err != nil {
-		return "", err
-	}
-
-	if cnt == 1 && buffer[0] == 0x1b {
-		return "ESC", nil
-	}
-
-	if buffer[0] == 0x1b && buffer[1] == '[' {
-		switch buffer[2] {
-		case 'A':
-			return "UP", nil
-		case 'B':
-			return "DOWN", nil
-		case 'C':
-			return "RIGHT", nil
-		case 'D':
-			return "LEFT", nil
-		}
-	}
-
-	return "", nil
-}
-
-func printScreen(snakeGame *game.SnakeGame, err error) {
+func printScreen(snakeGame *game.SnakeGame, gameStart time.Time, err error) {
 	fmt.Print("\x1b[2J")
 	fmt.Print("\x1b[1;1f")
-	fmt.Printf("Score: %d\n\n", snakeGame.Score())
+	fmt.Printf("Score: %d \t Time: %s\n\n", snakeGame.Score(), time.Since(gameStart).Truncate(time.Second))
 
 	for _, line := range snakeGame.Grid() {
 		for _, entity := range line {
@@ -92,44 +65,38 @@ func printScreen(snakeGame *game.SnakeGame, err error) {
 	}
 }
 
+func sleep(snakeGame *game.SnakeGame) {
+	time.Sleep(frame*time.Millisecond - time.Duration(snakeGame.Score())*time.Millisecond)
+}
+
 func main() {
+	eventCh := make(chan keyboard.Button)
+	defer close(eventCh)
+
+	keyboard.OnKeyDown(os.Stdin, eventCh)
 	snakeGame := game.New(width, height)
-	input := make(chan string)
-	direction := game.Right
 	gameOver := false
+	gameStart := time.Now()
 
 	initialise()
 	defer cleanup()
 
-	go func(input chan string) {
-		for {
-			data, err := readInput()
-
-			if err != nil {
-				log.Fatal("error reading input:", err)
-			}
-
-			input <- data
-		}
-	}(input)
-
-	timer := time.NewTimer(frame * time.Millisecond)
-
 	for !gameOver {
 		select {
-		case data := <-input:
-			if data == "ESC" {
+		case data := <-eventCh:
+			if data == keyboard.Esc {
 				break
 			}
 
-			if d := mapping[data]; snakeGame.CanMove(d) {
-				direction = d
+			if direction, ok := mapping[data]; ok {
+				snakeGame.SetDirection(direction)
 			}
-		case <-timer.C:
-			err := snakeGame.Move(direction)
-			printScreen(snakeGame, err)
-			gameOver = err != nil
-			timer.Reset(frame*time.Millisecond - 5*time.Duration(snakeGame.Score()))
+		default:
 		}
+
+		err := snakeGame.Move()
+		printScreen(snakeGame, gameStart, err)
+		gameOver = err != nil
+		sleep(snakeGame)
 	}
 }
